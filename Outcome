@@ -1,7 +1,7 @@
---[[ Spy-safe Player Toolkit
+--[[ Spy-safe Player Toolkit - VERSÃO COMPLETA
      LocalScript (colocar em StarterPlayerScripts)
-     Requisitos (servidor): colocar um BoolValue chamado "AllowSpy" dentro do Character
-     para cada personagem que o servidor autorizar ser "espiado".
+     Requisitos (servidor): BoolValue "AllowSpy" no Character para autorizar espionagem
+     Fechar o painel desativa TUDO automaticamente
 --]]
 
 local Players = game:GetService("Players")
@@ -15,285 +15,387 @@ local lpChar = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local lpHum = lpChar:WaitForChild("Humanoid")
 local lpHRP = lpChar:WaitForChild("HumanoidRootPart")
 
--- movement vars
+--// VARIÁVEIS DE MOVIMENTO //--
 local WALK_SPEED = 16
-local RUN_EXTRA = 4 -- corrida = WALK_SPEED + RUN_EXTRA por padrão
+local RUN_EXTRA = 4
 local speed = WALK_SPEED
 local running = false
 
--- gui + state
+--// VARIÁVEIS DE CONTROLE //--
+local spyEnabled = false
+local guiVisible = true
+local panelActive = true -- Controla se o painel está ativo
+local movementConnection = nil
+local scanConnection = nil
+
+--// JUMP FIX INTEGRADO //--
+task.spawn(function()
+    while task.wait(0.25) do
+        pcall(function()
+            StarterGui:SetCore("JumpButtonEnabled", true)
+            StarterGui:SetCore("JumpButtonVisible", true)
+        end)
+    end
+end)
+
+local function setupCharJump(char)
+    local hum = char:WaitForChild("Humanoid")
+    RunService.RenderStepped:Connect(function()
+        hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
+        hum.AutoJumpEnabled = false
+    end)
+end
+
+if lpChar then setupCharJump(lpChar) end
+LocalPlayer.CharacterAdded:Connect(setupCharJump)
+
+--// INTERFACE GUI //--
 local gui = Instance.new("ScreenGui")
-gui.Name = "SpyToolGui"
+gui.Name = "SpyToolkitGui"
 gui.ResetOnSpawn = false
 gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
 local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0,220,0,120)
-frame.Position = UDim2.new(0,10,0,10)
-frame.BackgroundTransparency = 0.25
-frame.BorderSizePixel = 0
+frame.Size = UDim2.new(0, 240, 0, 180)
+frame.Position = UDim2.new(0.02, 0, 0.3, 0)
+frame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+frame.BorderSizePixel = 2
+frame.BorderColor3 = Color3.fromRGB(60, 60, 80)
+frame.Active = true
+frame.Draggable = true
 
+local corner = Instance.new("UICorner", frame)
+corner.CornerRadius = UDim.new(0, 8)
+
+--// TÍTULO //--
 local title = Instance.new("TextLabel", frame)
-title.Size = UDim2.new(1,0,0,24)
-title.Position = UDim2.new(0,0,0,0)
-title.BackgroundTransparency = 1
-title.Text = "Spy Panel (safe)"
+title.Size = UDim2.new(1, 0, 0, 30)
+title.Position = UDim2.new(0, 0, 0, 0)
+title.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+title.Text = "🔍 Spy Toolkit"
 title.TextScaled = true
+title.TextColor3 = Color3.fromRGB(200, 200, 255)
+title.Font = Enum.Font.GothamBold
+
+local titleCorner = Instance.new("UICorner", title)
+titleCorner.CornerRadius = UDim.new(0, 8)
+
+--// SPEED BOX //--
+local speedLabel = Instance.new("TextLabel", frame)
+speedLabel.Size = UDim2.new(0.4, 0, 0, 25)
+speedLabel.Position = UDim2.new(0.05, 0, 0.22, 0)
+speedLabel.BackgroundTransparency = 1
+speedLabel.Text = "Velocidade:"
+speedLabel.TextColor3 = Color3.new(1, 1, 1)
+speedLabel.TextScaled = true
+speedLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 local speedBox = Instance.new("TextBox", frame)
-speedBox.Size = UDim2.new(0.6,0,0,28)
-speedBox.Position = UDim2.new(0.02,0,0.25,0)
+speedBox.Size = UDim2.new(0.45, 0, 0, 28)
+speedBox.Position = UDim2.new(0.5, 0, 0.22, 0)
 speedBox.Text = tostring(WALK_SPEED)
+speedBox.TextScaled = true
+speedBox.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+speedBox.TextColor3 = Color3.new(1, 1, 1)
 speedBox.ClearTextOnFocus = false
 
+local speedCorner = Instance.new("UICorner", speedBox)
+speedCorner.CornerRadius = UDim.new(0, 4)
+
+--// BOTÃO APLICAR //--
 local applyBtn = Instance.new("TextButton", frame)
-applyBtn.Size = UDim2.new(0.36,0,0,28)
-applyBtn.Position = UDim2.new(0.62,0,0.25,0)
-applyBtn.Text = "Aplicar"
+applyBtn.Size = UDim2.new(0.9, 0, 0, 28)
+applyBtn.Position = UDim2.new(0.05, 0, 0.42, 0)
+applyBtn.Text = "✓ Aplicar Velocidade"
+applyBtn.TextScaled = true
+applyBtn.BackgroundColor3 = Color3.fromRGB(40, 120, 40)
+applyBtn.TextColor3 = Color3.new(1, 1, 1)
 
+local applyCorner = Instance.new("UICorner", applyBtn)
+applyCorner.CornerRadius = UDim.new(0, 4)
+
+--// BOTÃO SPY TOGGLE //--
 local spyToggle = Instance.new("TextButton", frame)
-spyToggle.Size = UDim2.new(0.48,0,0,28)
-spyToggle.Position = UDim2.new(0.02,0,0.6,0)
-spyToggle.Text = "Spy: OFF"
-spyToggle.Active = true
+spyToggle.Size = UDim2.new(0.9, 0, 0, 28)
+spyToggle.Position = UDim2.new(0.05, 0, 0.62, 0)
+spyToggle.Text = "👁️ Spy: OFF"
+spyToggle.TextScaled = true
+spyToggle.BackgroundColor3 = Color3.fromRGB(80, 40, 40)
+spyToggle.TextColor3 = Color3.new(1, 1, 1)
 
-local resetBtn = Instance.new("TextButton", frame)
-resetBtn.Size = UDim2.new(0.48,0,0,28)
-resetBtn.Position = UDim2.new(0.5,0,0.6,0)
-resetBtn.Text = "Reset"
+local spyCorner = Instance.new("UICorner", spyToggle)
+spyCorner.CornerRadius = UDim.new(0, 4)
 
-local openKey = Enum.KeyCode.P -- tecla pra abrir/fechar GUI
-local guiVisible = true
+--// BOTÃO FECHAR //--
+local closeBtn = Instance.new("TextButton", frame)
+closeBtn.Size = UDim2.new(0.9, 0, 0, 28)
+closeBtn.Position = UDim2.new(0.05, 0, 0.82, 0)
+closeBtn.Text = "✖ Fechar Painel"
+closeBtn.TextScaled = true
+closeBtn.BackgroundColor3 = Color3.fromRGB(120, 30, 30)
+closeBtn.TextColor3 = Color3.new(1, 1, 1)
 
--- jump fix (keeps jump button enabled & disables AutoJump)
-task.spawn(function()
-	while true do
-		StarterGui:SetCore("JumpButtonEnabled", true)
-		StarterGui:SetCore("JumpButtonVisible", true)
-		task.wait(0.4)
-	end
-end)
+local closeCorner = Instance.new("UICorner", closeBtn)
+closeCorner.CornerRadius = UDim.new(0, 4)
 
--- apply speed
-applyBtn.MouseButton1Click:Connect(function()
-	local v = tonumber(speedBox.Text)
-	if v and v > 0 then
-		WALK_SPEED = v
-		speed = WALK_SPEED
-		RUN_EXTRA = math.max(1, math.floor(WALK_SPEED*0.15))
-	end
-end)
+--// ARMAZENAMENTO DE HIGHLIGHTS //--
+local highlights = {}
 
--- toggle spy mode (local-only toggle; visibility still depends on server flags & LOS)
-local spyEnabled = false
-spyToggle.MouseButton1Click:Connect(function()
-	spyEnabled = not spyEnabled
-	spyToggle.Text = spyEnabled and "Spy: ON" or "Spy: OFF"
-end)
-
--- open/close gui key
-UserInputService.InputBegan:Connect(function(inp, gpe)
-	if gpe then return end
-	if inp.KeyCode == openKey then
-		guiVisible = not guiVisible
-		frame.Visible = guiVisible
-	end
-	if inp.KeyCode == Enum.KeyCode.LeftShift then
-		running = true
-		speed = WALK_SPEED + RUN_EXTRA
-	end
-end)
-UserInputService.InputEnded:Connect(function(inp)
-	if inp.KeyCode == Enum.KeyCode.LeftShift then
-		running = false
-		speed = WALK_SPEED
-	end
-end)
-
--- store created highlights to cleanup
-local highlights = {} -- key = character, value = {highlight, billboard}
-
+--// FUNÇÕES DE LIMPEZA //--
 local function clearHighlightForCharacter(char)
-	if not char then return end
-	local existing = highlights[char]
-	if existing then
-		for _, obj in pairs(existing) do
-			if obj and obj.Parent then obj:Destroy() end
-		end
-		highlights[char] = nil
-	end
+    if not char then return end
+    local existing = highlights[char]
+    if existing then
+        for _, obj in pairs(existing) do
+            if obj and obj.Parent then 
+                pcall(function() obj:Destroy() end)
+            end
+        end
+        highlights[char] = nil
+    end
 end
 
+local function clearAllHighlights()
+    for char, _ in pairs(highlights) do
+        clearHighlightForCharacter(char)
+    end
+    highlights = {}
+end
+
+--// CRIAR HIGHLIGHT //--
 local function makeHighlightForCharacter(char, isSpecial)
-	clearHighlightForCharacter(char)
-	if not char or not char:IsA("Model") then return end
-	local adornee = char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart
-	if not adornee then return end
+    clearHighlightForCharacter(char)
+    if not char or not char:IsA("Model") then return end
+    
+    local adornee = char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart
+    if not adornee then return end
 
-	local h = Instance.new("Highlight")
-	h.Adornee = char
-	h.FillTransparency = 0.6
-	h.OutlineTransparency = 0.5
-	h.Parent = char
+    local h = Instance.new("Highlight")
+    h.Adornee = char
+    h.FillTransparency = 0.6
+    h.OutlineTransparency = 0.5
+    h.Parent = char
 
-	-- color sensível (apenas visual, sem atravessar paredes)
-	if isSpecial then
-		h.FillColor = Color3.fromRGB(200,50,50)
-		h.OutlineColor = Color3.fromRGB(255,100,100)
-	else
-		h.FillColor = Color3.fromRGB(50,100,200)
-		h.OutlineColor = Color3.fromRGB(100,150,255)
-	end
+    if isSpecial then
+        h.FillColor = Color3.fromRGB(200, 50, 50)
+        h.OutlineColor = Color3.fromRGB(255, 100, 100)
+    else
+        h.FillColor = Color3.fromRGB(50, 100, 200)
+        h.OutlineColor = Color3.fromRGB(100, 150, 255)
+    end
 
-	local bill
-	if isSpecial then
-		bill = Instance.new("BillboardGui", char)
-		bill.Name = "SpyTag"
-		bill.Adornee = adornee
-		bill.AlwaysOnTop = true
-		bill.Size = UDim2.new(0,80,0,24)
-		bill.StudsOffset = Vector3.new(0,2.5,0)
-		local t = Instance.new("TextLabel", bill)
-		t.Size = UDim2.new(1,0,1,0)
-		t.BackgroundTransparency = 1
-		t.TextScaled = true
-		t.Text = "[SPY]"
-		t.Font = Enum.Font.Arcade
-		t.TextColor3 = Color3.fromRGB(180,60,60)
-	end
+    local bill = nil
+    if isSpecial then
+        bill = Instance.new("BillboardGui", char)
+        bill.Name = "SpyTag"
+        bill.Adornee = adornee
+        bill.AlwaysOnTop = true
+        bill.Size = UDim2.new(0, 80, 0, 24)
+        bill.StudsOffset = Vector3.new(0, 2.5, 0)
+        
+        local t = Instance.new("TextLabel", bill)
+        t.Size = UDim2.new(1, 0, 1, 0)
+        t.BackgroundTransparency = 1
+        t.TextScaled = true
+        t.Text = "[SPY]"
+        t.Font = Enum.Font.Arcade
+        t.TextColor3 = Color3.fromRGB(255, 80, 80)
+    end
 
-	highlights[char] = {h, bill}
+    highlights[char] = {h, bill}
 end
 
--- line-of-sight check: returns true if there is a direct visible path from origin to targetPart
+--// LINE OF SIGHT //--
 local function hasLineOfSight(originPos, targetPart)
-	local params = RaycastParams.new()
-	params.FilterType = Enum.RaycastFilterType.Blacklist
-	-- ignore the target character's parts by not listing them in blacklist; instead blacklist LocalPlayer and other irrelevant things
-	params.FilterDescendantsInstances = {LocalPlayer.Character}
-	params.IgnoreWater = true
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Blacklist
+    params.FilterDescendantsInstances = {LocalPlayer.Character}
+    params.IgnoreWater = true
 
-	local dir = targetPart.Position - originPos
-	local res = Workspace:Raycast(originPos, dir, params)
-	if not res then
-		-- nothing hit between origin and target => clear LOS
-		return true
-	end
-	-- if ray hit something, check if that thing is part of targetPart's model
-	return res.Instance:IsDescendantOf(targetPart.Parent)
+    local dir = targetPart.Position - originPos
+    local res = Workspace:Raycast(originPos, dir, params)
+    
+    if not res then return true end
+    return res.Instance:IsDescendantOf(targetPart.Parent)
 end
 
--- spy evaluation per character
+--// AVALIAR ESPIONAGEM //--
 local function evaluateSpyForCharacter(char)
-	if not spyEnabled then
-		clearHighlightForCharacter(char)
-		return
-	end
-	if not char or not char:IsA("Model") then return end
-	if char == LocalPlayer.Character then
-		clearHighlightForCharacter(char)
-		return
-	end
+    if not spyEnabled or not panelActive then
+        clearHighlightForCharacter(char)
+        return
+    end
+    
+    if not char or not char:IsA("Model") or char == LocalPlayer.Character then
+        clearHighlightForCharacter(char)
+        return
+    end
 
-	-- server must add a BoolValue "AllowSpy" inside Character for authorization
-	local allow = char:FindFirstChild("AllowSpy")
-	if not allow or not allow.Value then
-		clearHighlightForCharacter(char)
-		return
-	end
+    local allow = char:FindFirstChild("AllowSpy")
+    if not allow or not allow.Value then
+        clearHighlightForCharacter(char)
+        return
+    end
 
-	local targetPart = char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart
-	if not targetPart then
-		clearHighlightForCharacter(char)
-		return
-	end
+    local targetPart = char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart
+    if not targetPart then
+        clearHighlightForCharacter(char)
+        return
+    end
 
-	-- distance check
-	local maxDist = 80 -- alcance máximo de espionagem (ajustável)
-	if (targetPart.Position - lpHRP.Position).Magnitude > maxDist then
-		clearHighlightForCharacter(char)
-		return
-	end
+    local maxDist = 80
+    if (targetPart.Position - lpHRP.Position).Magnitude > maxDist then
+        clearHighlightForCharacter(char)
+        return
+    end
 
-	-- line-of-sight check
-	if not hasLineOfSight(lpHRP.Position + Vector3.new(0,1,0), targetPart) then
-		clearHighlightForCharacter(char)
-		return
-	end
+    if not hasLineOfSight(lpHRP.Position + Vector3.new(0, 1, 0), targetPart) then
+        clearHighlightForCharacter(char)
+        return
+    end
 
-	-- determine if special (server might set an Attribute or special child; aqui apenas checamos por um Bool "IsEXE")
-	local isSpecial = false
-	local isEXE = char:FindFirstChild("IsEXE")
-	if isEXE and isEXE.Value then isSpecial = true end
+    local isSpecial = false
+    local isEXE = char:FindFirstChild("IsEXE")
+    if isEXE and isEXE.Value then isSpecial = true end
 
-	-- create highlight
-	makeHighlightForCharacter(char, isSpecial)
+    makeHighlightForCharacter(char, isSpecial)
 end
 
--- scan players/characters periodically and watch for changes (local-only loop)
+--// SCAN LOOP //--
 local function scanLoop()
-	while true do
-		-- keep local references fresh
-		lpChar = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-		lpHum = lpChar:FindFirstChildOfClass("Humanoid")
-		lpHRP = lpChar:FindFirstChild("HumanoidRootPart") or lpChar.PrimaryPart
+    while panelActive and task.wait(0.25) do
+        lpChar = LocalPlayer.Character
+        if lpChar then
+            lpHum = lpChar:FindFirstChildOfClass("Humanoid")
+            lpHRP = lpChar:FindFirstChild("HumanoidRootPart") or lpChar.PrimaryPart
+        end
 
-		-- evaluate each player character in workspace (Players' characters or a custom folder)
-		for _, pl in pairs(Players:GetPlayers()) do
-			local ch = pl.Character
-			if ch then
-				evaluateSpyForCharacter(ch)
-			end
-		end
+        for _, pl in pairs(Players:GetPlayers()) do
+            if pl.Character then
+                evaluateSpyForCharacter(pl.Character)
+            end
+        end
 
-		-- also optional: scan a `Workspace.Players` folder if your game uses it
-		local playersFolder = Workspace:FindFirstChild("Players")
-		if playersFolder then
-			for _, model in pairs(playersFolder:GetChildren()) do
-				if model:IsA("Model") and model ~= lpChar then
-					evaluateSpyForCharacter(model)
-				end
-			end
-		end
-
-		task.wait(0.25)
-	end
+        local playersFolder = Workspace:FindFirstChild("Players")
+        if playersFolder then
+            for _, model in pairs(playersFolder:GetChildren()) do
+                if model:IsA("Model") and model ~= lpChar then
+                    evaluateSpyForCharacter(model)
+                end
+            end
+        end
+    end
 end
+
+--// DESATIVAR TUDO //--
+local function deactivateAll()
+    panelActive = false
+    spyEnabled = false
+    running = false
+    speed = WALK_SPEED
+    
+    clearAllHighlights()
+    
+    if movementConnection then
+        movementConnection:Disconnect()
+        movementConnection = nil
+    end
+    
+    frame.Visible = false
+    spyToggle.Text = "👁️ Spy: OFF"
+    spyToggle.BackgroundColor3 = Color3.fromRGB(80, 40, 40)
+end
+
+--// REATIVAR TUDO //--
+local function reactivateAll()
+    panelActive = true
+    frame.Visible = true
+    
+    -- Reiniciar movimento
+    if not movementConnection then
+        movementConnection = RunService.RenderStepped:Connect(function(dt)
+            if not panelActive then return end
+            local dir = lpHum and lpHum.MoveDirection or Vector3.new()
+            if dir.Magnitude > 0 and lpHRP and lpHRP.Parent then
+                lpHRP.CFrame = lpHRP.CFrame + dir * (speed * dt)
+            end
+        end)
+    end
+    
+    -- Reiniciar scan loop
+    task.spawn(scanLoop)
+end
+
+--// BOTÕES //--
+applyBtn.MouseButton1Click:Connect(function()
+    if not panelActive then return end
+    local v = tonumber(speedBox.Text)
+    if v and v > 0 then
+        WALK_SPEED = v
+        speed = running and (v + RUN_EXTRA) or v
+        RUN_EXTRA = math.max(1, math.floor(v * 0.25))
+    end
+end)
+
+spyToggle.MouseButton1Click:Connect(function()
+    if not panelActive then return end
+    spyEnabled = not spyEnabled
+    spyToggle.Text = spyEnabled and "👁️ Spy: ON" or "👁️ Spy: OFF"
+    spyToggle.BackgroundColor3 = spyEnabled and Color3.fromRGB(40, 120, 40) or Color3.fromRGB(80, 40, 40)
+    
+    if not spyEnabled then
+        clearAllHighlights()
+    end
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+    if panelActive then
+        deactivateAll()
+    else
+        reactivateAll()
+    end
+    closeBtn.Text = panelActive and "✖ Fechar Painel" or "✓ Abrir Painel"
+end)
+
+--// TECLAS //--
+UserInputService.InputBegan:Connect(function(inp, gpe)
+    if gpe or not panelActive then return end
+    
+    if inp.KeyCode == Enum.KeyCode.P then
+        guiVisible = not guiVisible
+        frame.Visible = guiVisible and panelActive
+    end
+    
+    if inp.KeyCode == Enum.KeyCode.LeftShift then
+        running = true
+        speed = WALK_SPEED + RUN_EXTRA
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(inp)
+    if inp.KeyCode == Enum.KeyCode.LeftShift then
+        running = false
+        speed = WALK_SPEED
+    end
+end)
+
+--// INICIAR MOVIMENTO //--
+movementConnection = RunService.RenderStepped:Connect(function(dt)
+    if not panelActive then return end
+    local dir = lpHum and lpHum.MoveDirection or Vector3.new()
+    if dir.Magnitude > 0 and lpHRP and lpHRP.Parent then
+        lpHRP.CFrame = lpHRP.CFrame + dir * (speed * dt)
+    end
+end)
+
+--// INICIAR SCAN //--
 task.spawn(scanLoop)
 
--- cleanup/reset
-local function resetAll()
-	-- remove highlights/billboards
-	for char, _ in pairs(highlights) do
-		clearHighlightForCharacter(char)
-	end
-	highlights = {}
-	-- reset speeds and flags
-	WALK_SPEED = 16
-	RUN_EXTRA = 4
-	speed = WALK_SPEED
-	speedBox.Text = tostring(WALK_SPEED)
-	spyEnabled = false
-	spyToggle.Text = "Spy: OFF"
-	-- remove GUI? (vou deixar apenas resetar valores)
-end
-
-resetBtn.MouseButton1Click:Connect(resetAll)
-
--- movement: apply custom root motion each frame (compact)
-RunService.RenderStepped:Connect(function(dt)
-	local dir = lpHum and lpHum.MoveDirection or Vector3.new()
-	if dir.Magnitude > 0 then
-		-- move HRP by dir * speed * dt
-		if lpHRP and lpHRP.Parent then
-			lpHRP.CFrame = lpHRP.CFrame + dir * (speed * dt)
-		end
-	end
-end)
-
--- ensure we cleanup highlights when characters die/remove
+--// LIMPEZA AO REMOVER JOGADOR //--
 Players.PlayerRemoving:Connect(function(pl)
-	if pl.Character then
-		clearHighlightForCharacter(pl.Character)
-	end
+    if pl.Character then
+        clearHighlightForCharacter(pl.Character)
+    end
 end)
+
+print("✓ Spy Toolkit carregado! Pressione P para abrir/fechar | Shift para correr")
