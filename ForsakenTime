@@ -1,19 +1,20 @@
---[[ FORSAKENED CHEAT - ENHANCED VERSION
-     LocalScript - Optimized & Professional
+--[[ FORSAKENED CHEAT - REWORKED VERSION
+     LocalScript - Otimizado & Profissional
      Game: Forsaken
-     Version: 1.0 Enhanced
+     Version: 2.0 Reworked
 --]]
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 -- CONFIG
 local CONFIG = {
-    VERSION = "1.0 Enhanced",
+    VERSION = "2.0 Reworked",
     DEFAULT_SPEED = 16,
     MAX_SPEED = 25,
     DEFAULT_FOV = 80,
     AUTO_GEN_COOLDOWN = 2.5,
     SCAN_RATE = 0.1,
+    STAMINA_UPDATE_RATE = 0.05,
 }
 
 -- STATE
@@ -23,7 +24,6 @@ local state = {
     infiniteStamina = false,
     noStun = false,
     autoCoinFlip = false,
-    autoKill = false,
     espSurvivors = false,
     espKillers = false,
     espGenerators = false,
@@ -45,18 +45,21 @@ local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local LocalPlayer = Players.LocalPlayer
 
+-- CONEXÕES ATIVAS (para limpeza)
+local activeConnections = {}
+
 -- WINDOW
 local Window = Rayfield:CreateWindow({
-    Name = "FORSAKENED CHEAT - Enhanced by Iliankytb",
+    Name = "FORSAKENED CHEAT - Reworked by Iliankytb",
     Icon = 0,
     LoadingTitle = "FORSAKENED CHEAT",
-    LoadingSubtitle = "Enhanced Version Loading...",
+    LoadingSubtitle = "Versão Aprimorada Carregando...",
     Theme = "Default",
     DisableRayfieldPrompts = false,
     DisableBuildWarnings = false,
     ConfigurationSaving = {
         Enabled = true,
-        FolderName = "ForsakenedEnhanced",
+        FolderName = "ForsakenedReworked",
         FileName = "Config"
     },
     Discord = {
@@ -65,30 +68,20 @@ local Window = Rayfield:CreateWindow({
         RememberJoins = true
     },
     KeySystem = false,
-    KeySettings = {
-        Title = "FORSAKENED",
-        Subtitle = "Key System",
-        Note = "No key required",
-        FileName = "Key",
-        SaveKey = true,
-        GrabKeyFromSite = false,
-        Key = {"Hello"}
-    }
 })
 
 -- TABS
 local tabs = {
-    info = Window:CreateTab("Info"),
-    player = Window:CreateTab("Player"),
-    esp = Window:CreateTab("ESP"),
-    discord = Window:CreateTab("Discord"),
-    settings = Window:CreateTab("Settings"),
+    info = Window:CreateTab("📊 Info"),
+    player = Window:CreateTab("👤 Player"),
+    esp = Window:CreateTab("👁️ ESP"),
+    settings = Window:CreateTab("⚙️ Settings"),
 }
 
--- NOTIFICATIONS
+-- NOTIFICAÇÃO INICIAL
 Rayfield:Notify({
     Title = "FORSAKENED CHEAT",
-    Content = "Version " .. CONFIG.VERSION .. " Loaded",
+    Content = "Versão " .. CONFIG.VERSION .. " Carregada com Sucesso!",
     Duration = 3,
     Image = "check",
 })
@@ -97,8 +90,23 @@ Rayfield:Notify({
 local function safeCall(func)
     local success, err = pcall(func)
     if not success then
-        warn("Error:", err)
+        warn("[FORSAKENED] Erro:", err)
     end
+    return success
+end
+
+local function addConnection(connection)
+    table.insert(activeConnections, connection)
+    return connection
+end
+
+local function disconnectAll()
+    for _, conn in ipairs(activeConnections) do
+        if conn and conn.Disconnect then
+            conn:Disconnect()
+        end
+    end
+    activeConnections = {}
 end
 
 local function getServerInfo()
@@ -118,13 +126,16 @@ end
 local function copyToClipboard(text)
     if setclipboard then
         setclipboard(text)
+        return true
     else
-        warn("Clipboard not supported")
+        warn("[FORSAKENED] Clipboard não suportado neste executor")
+        return false
     end
 end
 
--- ESP SYSTEM
+-- ESP SYSTEM (Otimizado)
 local espObjects = {}
+local espCache = {}
 
 local function clearESP(object)
     if espObjects[object] then
@@ -140,11 +151,15 @@ local function clearAllESP()
         clearESP(object)
     end
     espObjects = {}
+    espCache = {}
 end
 
 local function createESP(model, color, text, adornee, offset)
     if not model or not adornee then return end
-    if model:FindFirstChildOfClass("Highlight") then return end
+    
+    -- Cache check para evitar recriação
+    local cacheKey = tostring(model) .. tostring(adornee)
+    if espCache[cacheKey] then return end
     
     clearESP(model)
     
@@ -157,7 +172,7 @@ local function createESP(model, color, text, adornee, offset)
     highlight.Parent = model
     
     local billboard = Instance.new("BillboardGui")
-    billboard.Name = "ESP"
+    billboard.Name = "ESP_Billboard"
     billboard.Size = UDim2.new(0, 100, 0, 40)
     billboard.AlwaysOnTop = true
     billboard.StudsOffset = Vector3.new(0, offset or 2, 0)
@@ -175,9 +190,10 @@ local function createESP(model, color, text, adornee, offset)
     label.Parent = billboard
     
     espObjects[model] = {highlight, billboard}
+    espCache[cacheKey] = true
 end
 
--- ESP LOOPS
+-- ESP LOOPS (Otimizados)
 local function espSurvivorsLoop()
     task.spawn(function()
         while state.espSurvivors do
@@ -185,8 +201,8 @@ local function espSurvivorsLoop()
                 local survivors = Workspace.Players.Survivors:GetChildren()
                 for _, player in pairs(survivors) do
                     if player:IsA("Model") and player:FindFirstChild("Head") then
-                        local username = player:GetAttribute("Username") or "Unknown"
-                        createESP(player, Color3.fromRGB(0, 255, 0), player.Name .. " (" .. username .. ")", player.Head, 2)
+                        local username = player:GetAttribute("Username") or "Survivor"
+                        createESP(player, Color3.fromRGB(0, 255, 0), player.Name .. "\n" .. username, player.Head, 2)
                     end
                 end
             end)
@@ -203,8 +219,8 @@ local function espKillersLoop()
                 local killers = Workspace.Players.Killers:GetChildren()
                 for _, player in pairs(killers) do
                     if player:IsA("Model") and player:FindFirstChild("Head") then
-                        local username = player:GetAttribute("Username") or "Unknown"
-                        createESP(player, Color3.fromRGB(255, 0, 0), player.Name .. " (" .. username .. ")", player.Head, 2)
+                        local username = player:GetAttribute("Username") or "Killer"
+                        createESP(player, Color3.fromRGB(255, 0, 0), player.Name .. "\n" .. username, player.Head, 2)
                     end
                 end
             end)
@@ -222,7 +238,7 @@ local function espGeneratorsLoop()
                 if map then
                     for _, gen in pairs(map:GetChildren()) do
                         if gen:IsA("Model") and gen.Name == "Generator" and gen.PrimaryPart then
-                            createESP(gen, Color3.fromRGB(255, 255, 0), "Generator", gen.PrimaryPart, -2)
+                            createESP(gen, Color3.fromRGB(255, 255, 0), "Generator", gen.PrimaryPart, 3)
                         end
                     end
                 end
@@ -239,7 +255,7 @@ local function espItemsLoop()
             safeCall(function()
                 for _, item in pairs(Workspace.Map.Ingame:GetChildren()) do
                     if item:IsA("Tool") and item:FindFirstChild("ItemRoot") then
-                        createESP(item, Color3.fromRGB(0, 0, 255), item.Name, item.ItemRoot, 1)
+                        createESP(item, Color3.fromRGB(0, 170, 255), item.Name, item.ItemRoot, 1)
                     end
                 end
                 
@@ -247,7 +263,7 @@ local function espItemsLoop()
                 if map then
                     for _, item in pairs(map:GetChildren()) do
                         if item:IsA("Tool") and item:FindFirstChild("ItemRoot") then
-                            createESP(item, Color3.fromRGB(0, 0, 255), item.Name, item.ItemRoot, 1)
+                            createESP(item, Color3.fromRGB(0, 170, 255), item.Name, item.ItemRoot, 1)
                         end
                     end
                 end
@@ -264,7 +280,7 @@ local function espRagdollsLoop()
             safeCall(function()
                 for _, ragdoll in pairs(Workspace.Ragdolls:GetChildren()) do
                     if ragdoll:IsA("Model") and ragdoll.PrimaryPart then
-                        createESP(ragdoll, Color3.fromRGB(100, 100, 100), ragdoll.Name, ragdoll.PrimaryPart, -1)
+                        createESP(ragdoll, Color3.fromRGB(150, 150, 150), "Ragdoll\n" .. ragdoll.Name, ragdoll.PrimaryPart, 1)
                     end
                 end
             end)
@@ -276,81 +292,142 @@ end
 
 -- PLAYER FUNCTIONS
 local function speedBoostLoop()
-    task.spawn(function()
-        while state.speedBoost do
-            safeCall(function()
-                local char = LocalPlayer.Character
-                if char then
-                    local hum = char:FindFirstChild("Humanoid")
-                    if hum then
-                        hum.WalkSpeed = state.currentSpeed
-                        hum:SetAttribute("BaseSpeed", state.currentSpeed)
-                    end
+    local connection
+    connection = addConnection(RunService.Heartbeat:Connect(function()
+        if not state.speedBoost then
+            connection:Disconnect()
+            return
+        end
+        
+        safeCall(function()
+            local char = LocalPlayer.Character
+            if char then
+                local hum = char:FindFirstChild("Humanoid")
+                if hum then
+                    hum.WalkSpeed = state.currentSpeed
+                    hum:SetAttribute("BaseSpeed", state.currentSpeed)
                 end
-            end)
-            task.wait(0.1)
+            end
+        end)
+    end))
+end
+
+-- INFINITE STAMINA SYSTEM - REWORKED & APRIMORADO
+local staminaModule = nil
+local staminaConnection = nil
+local staminaInitialized = false
+
+local function getSprintingModule()
+    local success, module = pcall(function()
+        return require(ReplicatedStorage.Systems.Character.Game.Sprinting)
+    end)
+    return success and module or nil
+end
+
+local function initializeStaminaModule()
+    staminaModule = getSprintingModule()
+    if staminaModule and not staminaModule.DefaultsSet then
+        safeCall(function()
+            staminaModule.Init()
+        end)
+    end
+    return staminaModule ~= nil
+end
+
+local function applyInfiniteStamina()
+    if not staminaModule then
+        if not initializeStaminaModule() then
+            warn("[FORSAKENED] Módulo de stamina não encontrado")
+            return
+        end
+    end
+    
+    safeCall(function()
+        -- Configurações otimizadas para stamina infinita
+        staminaModule.StaminaLoss = 0
+        staminaModule.StaminaGain = 999
+        staminaModule.MinStamina = 100
+        staminaModule.MaxStamina = 100
+        staminaModule.Stamina = 100
+        staminaModule.StaminaLossDisabled = true
+        
+        -- Força atualização visual
+        if staminaModule.__staminaChangedEvent then
+            staminaModule.__staminaChangedEvent:Fire()
+        end
+    end)
+end
+
+local function resetStamina()
+    if not staminaModule then return end
+    
+    safeCall(function()
+        staminaModule.StaminaLoss = 10
+        staminaModule.StaminaGain = 20
+        staminaModule.MinStamina = 0
+        staminaModule.MaxStamina = 100
+        staminaModule.Stamina = 100
+        staminaModule.StaminaLossDisabled = false
+        
+        if staminaModule.__staminaChangedEvent then
+            staminaModule.__staminaChangedEvent:Fire()
         end
     end)
 end
 
 local function infiniteStaminaLoop()
+    -- Inicializa na primeira vez
+    if not staminaInitialized then
+        task.wait(1) -- Aguarda o jogo carregar
+        initializeStaminaModule()
+        staminaInitialized = true
+    end
+    
+    -- Aplica stamina infinita imediatamente
+    applyInfiniteStamina()
+    
+    -- Loop de manutenção contínua
     task.spawn(function()
         while state.infiniteStamina do
-            safeCall(function()
-                local sprintModule = ReplicatedStorage:FindFirstChild("Systems")
-                if sprintModule then
-                    sprintModule = sprintModule:FindFirstChild("Character")
-                    if sprintModule then
-                        sprintModule = sprintModule:FindFirstChild("Game")
-                        if sprintModule then
-                            sprintModule = sprintModule:FindFirstChild("Sprinting")
-                            if sprintModule then
-                                local module = require(sprintModule)
-                                module.StaminaLossDisabled = true
-                                module.Stamina = 999999
-                            end
-                        end
-                    end
-                end
-            end)
-            task.wait(0.1)
+            applyInfiniteStamina()
+            task.wait(CONFIG.STAMINA_UPDATE_RATE)
         end
-        
-        safeCall(function()
-            local sprintModule = ReplicatedStorage:FindFirstChild("Systems")
-            if sprintModule then
-                sprintModule = sprintModule:FindFirstChild("Character")
-                if sprintModule then
-                    sprintModule = sprintModule:FindFirstChild("Game")
-                    if sprintModule then
-                        sprintModule = sprintModule:FindFirstChild("Sprinting")
-                        if sprintModule then
-                            local module = require(sprintModule)
-                            module.StaminaLossDisabled = false
-                            module.Stamina = 100
-                        end
-                    end
-                end
-            end
-        end)
+        resetStamina()
     end)
+    
+    -- Listener para respawn do personagem
+    if staminaConnection then
+        staminaConnection:Disconnect()
+    end
+    
+    staminaConnection = addConnection(LocalPlayer.CharacterAdded:Connect(function()
+        if state.infiniteStamina then
+            task.wait(1)
+            staminaModule = nil -- Força reinicialização
+            initializeStaminaModule()
+            applyInfiniteStamina()
+        end
+    end))
 end
 
 local function noStunLoop()
-    task.spawn(function()
-        while state.noStun do
-            safeCall(function()
-                local char = LocalPlayer.Character
-                if char then
-                    local hrp = char:FindFirstChild("HumanoidRootPart")
-                    if hrp then
-                        hrp.Anchored = false
-                    end
-                end
-            end)
-            task.wait(0.001)
+    local connection
+    connection = addConnection(RunService.Heartbeat:Connect(function()
+        if not state.noStun then
+            connection:Disconnect()
+            return
         end
-    end)
+        
+        safeCall(function()
+            local char = LocalPlayer.Character
+            if char then
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                if hrp and hrp.Anchored then
+                    hrp.Anchored = false
+                end
+            end
+        end)
+    end))
 end
 
 local function autoGeneratorLoop()
@@ -398,15 +475,22 @@ local function autoCoinFlipLoop()
 end
 
 local function fullBrightLoop()
-    task.spawn(function()
-        while state.fullBright do
-            safeCall(function()
-                Lighting.Brightness = 5
-                Lighting.Ambient = Color3.fromRGB(255, 255, 255)
-            end)
-            task.wait(0.1)
+    local connection
+    connection = addConnection(RunService.Heartbeat:Connect(function()
+        if not state.fullBright then
+            Lighting.Brightness = 1
+            Lighting.Ambient = Color3.fromRGB(0, 0, 0)
+            connection:Disconnect()
+            return
         end
-    end)
+        
+        safeCall(function()
+            Lighting.Brightness = 5
+            Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+            Lighting.ClockTime = 12
+            Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+        end)
+    end))
 end
 
 local function removeLagLoop()
@@ -429,9 +513,10 @@ local function removeLagLoop()
                     end
                 end
             end)
-            task.wait(0.1)
+            task.wait(0.5) -- Reduzido para melhor performance
         end
         
+        -- Restaura materiais originais
         safeCall(function()
             for _, asset in pairs(Workspace:GetDescendants()) do
                 if asset:IsA("Part") or asset:IsA("MeshPart") then
@@ -458,32 +543,50 @@ local function removeLagLoop()
 end
 
 -- INFO TAB
+tabs.info:CreateParagraph({
+    Title = "📢 Bem-vindo ao FORSAKENED CHEAT",
+    Content = "Versão aprimorada com sistema de stamina completamente reworkado e otimizações de performance!"
+})
+
 local serverInfoParagraph = tabs.info:CreateParagraph({
-    Title = "Server Info",
-    Content = "Loading..."
+    Title = "🌐 Informações do Servidor",
+    Content = "Carregando..."
 })
 
 task.spawn(function()
     while true do
-        task.wait(1)
+        task.wait(2)
         safeCall(function()
             local info = getServerInfo()
             local content = string.format(
-                "PlaceId: %s\nJobId: %s\nStudio: %s\nPlayers: %d/%d",
+                "🆔 PlaceId: %s\n🎮 JobId: %s\n🏠 Studio: %s\n👥 Jogadores: %d/%d",
                 info.PlaceId,
                 info.JobId,
                 tostring(info.IsStudio),
                 info.CurrentPlayers,
                 info.MaxPlayers
             )
-            serverInfoParagraph:Set({Title = "Server Info", Content = content})
+            serverInfoParagraph:Set({Title = "🌐 Informações do Servidor", Content = content})
         end)
     end
 end)
 
+tabs.info:CreateButton({
+    Name = "📋 Copiar JobId",
+    Callback = function()
+        if copyToClipboard(game.JobId) then
+            Rayfield:Notify({
+                Title = "✅ Sucesso",
+                Content = "JobId copiado para área de transferência!",
+                Duration = 2,
+            })
+        end
+    end,
+})
+
 -- PLAYER TAB
-local speedSlider = tabs.player:CreateSlider({
-    Name = "Player Speed",
+tabs.player:CreateSlider({
+    Name = "🏃 Velocidade do Jogador",
     Range = {0, CONFIG.MAX_SPEED},
     Increment = 1,
     Suffix = " Speed",
@@ -495,7 +598,7 @@ local speedSlider = tabs.player:CreateSlider({
 })
 
 tabs.player:CreateToggle({
-    Name = "Speed Boost",
+    Name = "⚡ Speed Boost",
     CurrentValue = false,
     Flag = "SpeedToggle",
     Callback = function(value)
@@ -505,17 +608,26 @@ tabs.player:CreateToggle({
 })
 
 tabs.player:CreateToggle({
-    Name = "Infinite Stamina",
+    Name = "♾️ Infinite Stamina [REWORKED]",
     CurrentValue = false,
     Flag = "StaminaToggle",
     Callback = function(value)
         state.infiniteStamina = value
-        infiniteStaminaLoop()
+        if value then
+            infiniteStaminaLoop()
+            Rayfield:Notify({
+                Title = "♾️ Stamina Infinita",
+                Content = "Sistema aprimorado ativado!",
+                Duration = 2,
+            })
+        else
+            resetStamina()
+        end
     end,
 })
 
 tabs.player:CreateToggle({
-    Name = "No Stun",
+    Name = "🛡️ No Stun",
     CurrentValue = false,
     Flag = "NoStunToggle",
     Callback = function(value)
@@ -525,7 +637,7 @@ tabs.player:CreateToggle({
 })
 
 tabs.player:CreateToggle({
-    Name = "Auto Generator",
+    Name = "⚙️ Auto Generator",
     CurrentValue = false,
     Flag = "AutoGenToggle",
     Callback = function(value)
@@ -535,7 +647,7 @@ tabs.player:CreateToggle({
 })
 
 tabs.player:CreateToggle({
-    Name = "Auto Coin Flip",
+    Name = "🪙 Auto Coin Flip",
     CurrentValue = false,
     Flag = "CoinFlipToggle",
     Callback = function(value)
@@ -545,7 +657,7 @@ tabs.player:CreateToggle({
 })
 
 tabs.player:CreateToggle({
-    Name = "Full Bright",
+    Name = "💡 Full Bright",
     CurrentValue = false,
     Flag = "FullBrightToggle",
     Callback = function(value)
@@ -555,7 +667,7 @@ tabs.player:CreateToggle({
 })
 
 tabs.player:CreateToggle({
-    Name = "Remove Lag",
+    Name = "🚀 Remove Lag",
     CurrentValue = false,
     Flag = "RemoveLagToggle",
     Callback = function(value)
@@ -564,8 +676,8 @@ tabs.player:CreateToggle({
     end,
 })
 
-local fovSlider = tabs.player:CreateSlider({
-    Name = "Field of View",
+tabs.player:CreateSlider({
+    Name = "🔭 Field of View",
     Range = {CONFIG.DEFAULT_FOV, 120},
     Increment = 1,
     Suffix = " FOV",
@@ -573,11 +685,16 @@ local fovSlider = tabs.player:CreateSlider({
     Flag = "FOVSlider",
     Callback = function(value)
         state.currentFOV = value
+        if state.modifyFOV then
+            safeCall(function()
+                LocalPlayer.PlayerData.Settings.Game.FieldOfView.Value = value
+            end)
+        end
     end,
 })
 
 tabs.player:CreateToggle({
-    Name = "Modify FOV",
+    Name = "📷 Modify FOV",
     CurrentValue = false,
     Flag = "FOVToggle",
     Callback = function(value)
@@ -597,7 +714,7 @@ tabs.player:CreateToggle({
 
 -- ESP TAB
 tabs.esp:CreateToggle({
-    Name = "Survivors ESP",
+    Name = "🟢 Survivors ESP",
     CurrentValue = false,
     Flag = "SurvivorsESP",
     Callback = function(value)
@@ -607,7 +724,7 @@ tabs.esp:CreateToggle({
 })
 
 tabs.esp:CreateToggle({
-    Name = "Killers ESP",
+    Name = "🔴 Killers ESP",
     CurrentValue = false,
     Flag = "KillersESP",
     Callback = function(value)
@@ -617,7 +734,7 @@ tabs.esp:CreateToggle({
 })
 
 tabs.esp:CreateToggle({
-    Name = "Generators ESP",
+    Name = "🟡 Generators ESP",
     CurrentValue = false,
     Flag = "GeneratorsESP",
     Callback = function(value)
@@ -627,7 +744,7 @@ tabs.esp:CreateToggle({
 })
 
 tabs.esp:CreateToggle({
-    Name = "Items ESP",
+    Name = "🔵 Items ESP",
     CurrentValue = false,
     Flag = "ItemsESP",
     Callback = function(value)
@@ -637,7 +754,7 @@ tabs.esp:CreateToggle({
 })
 
 tabs.esp:CreateToggle({
-    Name = "Ragdolls ESP",
+    Name = "⚪ Ragdolls ESP",
     CurrentValue = false,
     Flag = "RagdollsESP",
     Callback = function(value)
@@ -646,14 +763,13 @@ tabs.esp:CreateToggle({
     end,
 })
 
--- DISCORD TAB
-tabs.discord:CreateButton({
-    Name = "Copy Discord Link",
+tabs.esp:CreateButton({
+    Name = "🧹 Limpar Todos os ESP",
     Callback = function()
-        copyToClipboard("https://discord.gg/E2TqYRsRP4")
+        clearAllESP()
         Rayfield:Notify({
-            Title = "Discord",
-            Content = "Link copied to clipboard!",
+            Title = "🧹 ESP Limpo",
+            Content = "Todos os ESP foram removidos!",
             Duration = 2,
         })
     end,
@@ -661,8 +777,11 @@ tabs.discord:CreateButton({
 
 -- SETTINGS TAB
 tabs.settings:CreateButton({
-    Name = "Unload Cheat",
+    Name = "🗑️ Descarregar Cheat",
     Callback = function()
+        disconnectAll()
+        clearAllESP()
+        resetStamina()
         Rayfield:Destroy()
     end,
 })
@@ -673,13 +792,17 @@ local themes = {
 }
 
 tabs.settings:CreateDropdown({
-    Name = "Theme",
+    Name = "🎨 Tema",
     Options = themes,
-    CurrentOption = "Default",
+    CurrentOption = {"Default"},
     Flag = "ThemeDropdown",
     Callback = function(selected)
-        Window.ModifyTheme(selected[1])
+        Window:ModifyTheme(selected[1])
     end,
 })
 
+-- Carrega configurações salvas
 Rayfield:LoadConfiguration()
+
+-- Mensagem final
+print("[FORSAKENED CHEAT] Versão 2.0 Reworked carregada com sucesso!")
