@@ -1,19 +1,19 @@
 --[[ FORSAKENED CHEAT - ENHANCED VERSION
      LocalScript - Optimized & Professional
      Game: Forsaken
-     Version: 1.0 Enhanced
+     Version: 1.1 Enhanced (FOV Removed, Killer ESP + Stamina Reworked)
 --]]
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 -- CONFIG
 local CONFIG = {
-    VERSION = "1.0 Enhanced",
+    VERSION = "1.1 Enhanced",
     DEFAULT_SPEED = 16,
     MAX_SPEED = 25,
-    DEFAULT_FOV = 80,
     AUTO_GEN_COOLDOWN = 2.5,
     SCAN_RATE = 0.1,
+    KILLER_ESP_UPDATE_RATE = 0.05, -- Mais rápido para killers
 }
 
 -- STATE
@@ -31,10 +31,7 @@ local state = {
     espRagdolls = false,
     fullBright = false,
     removeLag = false,
-    modifyFOV = false,
     currentSpeed = CONFIG.DEFAULT_SPEED,
-    currentFOV = CONFIG.DEFAULT_FOV,
-    originalFOV = 80,
 }
 
 -- SERVICES
@@ -177,6 +174,107 @@ local function createESP(model, color, text, adornee, offset)
     espObjects[model] = {highlight, billboard}
 end
 
+-- REWORKED: KILLER ESP COM DISTÂNCIA E HEALTH
+local function createKillerESP(model, adornee, username)
+    if not model or not adornee then return end
+    
+    clearESP(model)
+    
+    -- Highlight mais intenso para killers
+    local highlight = Instance.new("Highlight")
+    highlight.Adornee = model
+    highlight.FillColor = Color3.fromRGB(255, 0, 0)
+    highlight.OutlineColor = Color3.fromRGB(255, 100, 100)
+    highlight.FillTransparency = 0.3
+    highlight.OutlineTransparency = 0
+    highlight.Parent = model
+    
+    -- Billboard maior e mais visível
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "KillerESP"
+    billboard.Size = UDim2.new(0, 200, 0, 80)
+    billboard.AlwaysOnTop = true
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.Adornee = adornee
+    billboard.Parent = adornee
+    
+    -- Frame com fundo
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, 0, 1, 0)
+    frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    frame.BackgroundTransparency = 0.5
+    frame.BorderSizePixel = 0
+    frame.Parent = billboard
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = frame
+    
+    -- Label do nome
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, 0, 0.4, 0)
+    nameLabel.Position = UDim2.new(0, 0, 0, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = "⚠️ KILLER: " .. model.Name
+    nameLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
+    nameLabel.TextScaled = true
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.TextStrokeTransparency = 0
+    nameLabel.Parent = frame
+    
+    -- Label de username
+    local usernameLabel = Instance.new("TextLabel")
+    usernameLabel.Size = UDim2.new(1, 0, 0.3, 0)
+    usernameLabel.Position = UDim2.new(0, 0, 0.4, 0)
+    usernameLabel.BackgroundTransparency = 1
+    usernameLabel.Text = "(@" .. username .. ")"
+    usernameLabel.TextColor3 = Color3.fromRGB(255, 200, 200)
+    usernameLabel.TextScaled = true
+    usernameLabel.Font = Enum.Font.Gotham
+    usernameLabel.TextStrokeTransparency = 0.3
+    usernameLabel.Parent = frame
+    
+    -- Label de distância (atualizado dinamicamente)
+    local distanceLabel = Instance.new("TextLabel")
+    distanceLabel.Size = UDim2.new(1, 0, 0.3, 0)
+    distanceLabel.Position = UDim2.new(0, 0, 0.7, 0)
+    distanceLabel.BackgroundTransparency = 1
+    distanceLabel.Text = "Distance: Calculating..."
+    distanceLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+    distanceLabel.TextScaled = true
+    distanceLabel.Font = Enum.Font.Gotham
+    distanceLabel.TextStrokeTransparency = 0.3
+    distanceLabel.Parent = frame
+    
+    espObjects[model] = {highlight, billboard}
+    
+    -- Thread para atualizar distância em tempo real
+    task.spawn(function()
+        while espObjects[model] and state.espKillers do
+            safeCall(function()
+                local char = LocalPlayer.Character
+                if char and char:FindFirstChild("HumanoidRootPart") and adornee then
+                    local distance = (char.HumanoidRootPart.Position - adornee.Position).Magnitude
+                    distanceLabel.Text = string.format("📍 %.1f studs", distance)
+                    
+                    -- Muda cor baseado na distância
+                    if distance < 30 then
+                        distanceLabel.TextColor3 = Color3.fromRGB(255, 0, 0) -- Vermelho (PERIGO)
+                        nameLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+                    elseif distance < 60 then
+                        distanceLabel.TextColor3 = Color3.fromRGB(255, 165, 0) -- Laranja (ATENÇÃO)
+                        nameLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+                    else
+                        distanceLabel.TextColor3 = Color3.fromRGB(255, 255, 0) -- Amarelo (SEGURO)
+                        nameLabel.TextColor3 = Color3.fromRGB(255, 150, 150)
+                    end
+                end
+            end)
+            task.wait(0.1)
+        end
+    end)
+end
+
 -- ESP LOOPS
 local function espSurvivorsLoop()
     task.spawn(function()
@@ -196,6 +294,7 @@ local function espSurvivorsLoop()
     end)
 end
 
+-- REWORKED: Killer ESP Loop
 local function espKillersLoop()
     task.spawn(function()
         while state.espKillers do
@@ -204,11 +303,11 @@ local function espKillersLoop()
                 for _, player in pairs(killers) do
                     if player:IsA("Model") and player:FindFirstChild("Head") then
                         local username = player:GetAttribute("Username") or "Unknown"
-                        createESP(player, Color3.fromRGB(255, 0, 0), player.Name .. " (" .. username .. ")", player.Head, 2)
+                        createKillerESP(player, player.Head, username)
                     end
                 end
             end)
-            task.wait(CONFIG.SCAN_RATE)
+            task.wait(CONFIG.KILLER_ESP_UPDATE_RATE)
         end
         clearAllESP()
     end)
@@ -293,47 +392,93 @@ local function speedBoostLoop()
     end)
 end
 
+-- REWORKED: Infinite Stamina mais eficiente
+local staminaConnection = nil
+
 local function infiniteStaminaLoop()
-    task.spawn(function()
-        while state.infiniteStamina do
-            safeCall(function()
-                local sprintModule = ReplicatedStorage:FindFirstChild("Systems")
-                if sprintModule then
-                    sprintModule = sprintModule:FindFirstChild("Character")
-                    if sprintModule then
-                        sprintModule = sprintModule:FindFirstChild("Game")
-                        if sprintModule then
-                            sprintModule = sprintModule:FindFirstChild("Sprinting")
-                            if sprintModule then
-                                local module = require(sprintModule)
-                                module.StaminaLossDisabled = true
-                                module.Stamina = 999999
+    -- Desconecta conexão anterior se existir
+    if staminaConnection then
+        staminaConnection:Disconnect()
+        staminaConnection = nil
+    end
+    
+    if state.infiniteStamina then
+        -- Método 1: Hook no módulo de Sprint
+        task.spawn(function()
+            while state.infiniteStamina do
+                safeCall(function()
+                    local sprintPath = ReplicatedStorage:FindFirstChild("Systems")
+                    if sprintPath then
+                        sprintPath = sprintPath:FindFirstChild("Character")
+                        if sprintPath then
+                            sprintPath = sprintPath:FindFirstChild("Game")
+                            if sprintPath then
+                                sprintPath = sprintPath:FindFirstChild("Sprinting")
+                                if sprintPath then
+                                    local module = require(sprintPath)
+                                    if module then
+                                        module.StaminaLossDisabled = true
+                                        module.Stamina = 999999
+                                        module.MaxStamina = 999999
+                                        module.StaminaRegenRate = 999999
+                                    end
+                                end
                             end
+                        end
+                    end
+                end)
+                task.wait(0.05)
+            end
+        end)
+        
+        -- Método 2: Força atributos do personagem
+        staminaConnection = RunService.Heartbeat:Connect(function()
+            if not state.infiniteStamina then return end
+            
+            safeCall(function()
+                local char = LocalPlayer.Character
+                if char then
+                    local hum = char:FindFirstChild("Humanoid")
+                    if hum then
+                        -- Força stamina infinita via atributos
+                        hum:SetAttribute("Stamina", 100)
+                        hum:SetAttribute("MaxStamina", 100)
+                        hum:SetAttribute("StaminaEnabled", false)
+                        
+                        -- Remove debuffs de cansaço
+                        if hum:GetAttribute("Exhausted") then
+                            hum:SetAttribute("Exhausted", false)
+                        end
+                        if hum:GetAttribute("Tired") then
+                            hum:SetAttribute("Tired", false)
                         end
                     end
                 end
             end)
-            task.wait(0.1)
-        end
-        
+        end)
+    else
+        -- Restaura valores originais
         safeCall(function()
-            local sprintModule = ReplicatedStorage:FindFirstChild("Systems")
-            if sprintModule then
-                sprintModule = sprintModule:FindFirstChild("Character")
-                if sprintModule then
-                    sprintModule = sprintModule:FindFirstChild("Game")
-                    if sprintModule then
-                        sprintModule = sprintModule:FindFirstChild("Sprinting")
-                        if sprintModule then
-                            local module = require(sprintModule)
-                            module.StaminaLossDisabled = false
-                            module.Stamina = 100
+            local sprintPath = ReplicatedStorage:FindFirstChild("Systems")
+            if sprintPath then
+                sprintPath = sprintPath:FindFirstChild("Character")
+                if sprintPath then
+                    sprintPath = sprintPath:FindFirstChild("Game")
+                    if sprintPath then
+                        sprintPath = sprintPath:FindFirstChild("Sprinting")
+                        if sprintPath then
+                            local module = require(sprintPath)
+                            if module then
+                                module.StaminaLossDisabled = false
+                                module.Stamina = 100
+                                module.MaxStamina = 100
+                            end
                         end
                     end
                 end
             end
         end)
-    end)
+    end
 end
 
 local function noStunLoop()
@@ -564,37 +709,6 @@ tabs.player:CreateToggle({
     end,
 })
 
-local fovSlider = tabs.player:CreateSlider({
-    Name = "Field of View",
-    Range = {CONFIG.DEFAULT_FOV, 120},
-    Increment = 1,
-    Suffix = " FOV",
-    CurrentValue = CONFIG.DEFAULT_FOV,
-    Flag = "FOVSlider",
-    Callback = function(value)
-        state.currentFOV = value
-    end,
-})
-
-tabs.player:CreateToggle({
-    Name = "Modify FOV",
-    CurrentValue = false,
-    Flag = "FOVToggle",
-    Callback = function(value)
-        state.modifyFOV = value
-        safeCall(function()
-            if value then
-                if not state.originalFOV then
-                    state.originalFOV = LocalPlayer.PlayerData.Settings.Game.FieldOfView.Value
-                end
-                LocalPlayer.PlayerData.Settings.Game.FieldOfView.Value = state.currentFOV
-            else
-                LocalPlayer.PlayerData.Settings.Game.FieldOfView.Value = state.originalFOV
-            end
-        end)
-    end,
-})
-
 -- ESP TAB
 tabs.esp:CreateToggle({
     Name = "Survivors ESP",
@@ -607,7 +721,7 @@ tabs.esp:CreateToggle({
 })
 
 tabs.esp:CreateToggle({
-    Name = "Killers ESP",
+    Name = "Killers ESP (Enhanced)",
     CurrentValue = false,
     Flag = "KillersESP",
     Callback = function(value)
@@ -663,6 +777,10 @@ tabs.discord:CreateButton({
 tabs.settings:CreateButton({
     Name = "Unload Cheat",
     Callback = function()
+        -- Limpa conexões antes de destruir
+        if staminaConnection then
+            staminaConnection:Disconnect()
+        end
         Rayfield:Destroy()
     end,
 })
