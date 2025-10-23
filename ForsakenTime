@@ -1,19 +1,19 @@
 --[[ FORSAKENED CHEAT - ENHANCED VERSION
      LocalScript - Optimized & Professional
      Game: Forsaken
-     Version: 1.1 Enhanced (FOV Removed, Killer ESP + Stamina Reworked)
+     Version: 1.2 Enhanced (Cleaned Version)
 --]]
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 -- CONFIG
 local CONFIG = {
-    VERSION = "1.1 Enhanced",
+    VERSION = "1.2 Enhanced",
     DEFAULT_SPEED = 16,
     MAX_SPEED = 25,
     AUTO_GEN_COOLDOWN = 2.5,
     SCAN_RATE = 0.1,
-    KILLER_ESP_UPDATE_RATE = 0.05, -- Mais rápido para killers
+    KILLER_ESP_UPDATE_RATE = 0.05,
 }
 
 -- STATE
@@ -29,7 +29,6 @@ local state = {
     espGenerators = false,
     espItems = false,
     espRagdolls = false,
-    fullBright = false,
     removeLag = false,
     currentSpeed = CONFIG.DEFAULT_SPEED,
 }
@@ -39,7 +38,6 @@ local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local Lighting = game:GetService("Lighting")
 local LocalPlayer = Players.LocalPlayer
 
 -- WINDOW
@@ -78,7 +76,6 @@ local tabs = {
     info = Window:CreateTab("Info"),
     player = Window:CreateTab("Player"),
     esp = Window:CreateTab("ESP"),
-    discord = Window:CreateTab("Discord"),
     settings = Window:CreateTab("Settings"),
 }
 
@@ -110,14 +107,6 @@ local function getServerInfo()
         CurrentPlayers = playerCount,
         MaxPlayers = maxPlayers
     }
-end
-
-local function copyToClipboard(text)
-    if setclipboard then
-        setclipboard(text)
-    else
-        warn("Clipboard not supported")
-    end
 end
 
 -- ESP SYSTEM
@@ -174,7 +163,7 @@ local function createESP(model, color, text, adornee, offset)
     espObjects[model] = {highlight, billboard}
 end
 
--- REWORKED: KILLER ESP COM DISTÂNCIA E HEALTH
+-- KILLER ESP COM DISTÂNCIA E HEALTH
 local function createKillerESP(model, adornee, username)
     if not model or not adornee then return end
     
@@ -294,7 +283,6 @@ local function espSurvivorsLoop()
     end)
 end
 
--- REWORKED: Killer ESP Loop
 local function espKillersLoop()
     task.spawn(function()
         while state.espKillers do
@@ -392,7 +380,7 @@ local function speedBoostLoop()
     end)
 end
 
--- REWORKED: Infinite Stamina mais eficiente
+-- Infinite Stamina
 local staminaConnection = nil
 
 local function infiniteStaminaLoop()
@@ -542,18 +530,6 @@ local function autoCoinFlipLoop()
     end)
 end
 
-local function fullBrightLoop()
-    task.spawn(function()
-        while state.fullBright do
-            safeCall(function()
-                Lighting.Brightness = 5
-                Lighting.Ambient = Color3.fromRGB(255, 255, 255)
-            end)
-            task.wait(0.1)
-        end
-    end)
-end
-
 local function removeLagLoop()
     task.spawn(function()
         while state.removeLag do
@@ -690,16 +666,6 @@ tabs.player:CreateToggle({
 })
 
 tabs.player:CreateToggle({
-    Name = "Full Bright",
-    CurrentValue = false,
-    Flag = "FullBrightToggle",
-    Callback = function(value)
-        state.fullBright = value
-        if value then fullBrightLoop() end
-    end,
-})
-
-tabs.player:CreateToggle({
     Name = "Remove Lag",
     CurrentValue = false,
     Flag = "RemoveLagToggle",
@@ -760,19 +726,6 @@ tabs.esp:CreateToggle({
     end,
 })
 
--- DISCORD TAB
-tabs.discord:CreateButton({
-    Name = "Copy Discord Link",
-    Callback = function()
-        copyToClipboard("https://discord.gg/E2TqYRsRP4")
-        Rayfield:Notify({
-            Title = "Discord",
-            Content = "Link copied to clipboard!",
-            Duration = 2,
-        })
-    end,
-})
-
 -- SETTINGS TAB
 tabs.settings:CreateButton({
     Name = "Unload Cheat",
@@ -782,21 +735,6 @@ tabs.settings:CreateButton({
             staminaConnection:Disconnect()
         end
         Rayfield:Destroy()
-    end,
-})
-
-local themes = {
-    "Default", "Amber Glow", "Amethyst", "Bloom", 
-    "Dark Blue", "Green", "Light", "Ocean", "Serenity"
-}
-
-tabs.settings:CreateDropdown({
-    Name = "Theme",
-    Options = themes,
-    CurrentOption = "Default",
-    Flag = "ThemeDropdown",
-    Callback = function(selected)
-        Window.ModifyTheme(selected[1])
     end,
 })
 
